@@ -19,15 +19,12 @@ password = os.getenv('PASSWORD')
 
 # Set up Chrome options to run headless (without opening a browser window)
 chrome_options = Options()
-# Uncomment if you want to run in headless mode
-# chrome_options.add_argument("--headless")  
-# chrome_options.add_argument("--disable-gpu")  
-# chrome_options.add_argument("--no-sandbox")  
-# chrome_options.add_argument("--disable-dev-shm-usage")  
+chrome_options.add_argument("--headless=new")
+chrome_options.add_argument("--disable-gpu")
 
 # Set up the WebDriver with headless Chrome
 driver = webdriver.Chrome(options=chrome_options)
-
+print("script is Running....")
 # Open LinkedIn login page
 driver.get("https://www.linkedin.com/login")
 
@@ -51,8 +48,6 @@ try:
     # Try to load the existing workbook
     book = load_workbook(file_name)
     writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')  # Open the file in append mode
-    # writer.book = book  # No need to set this if you're already in append mode, but we'll keep it
-    
     # Load existing data
     df_existing = pd.read_excel(file_name, sheet_name='Connections')
     existing_count = len(df_existing)
@@ -66,9 +61,12 @@ data = []
 
 # Counter for new entries
 new_entries_count = 0
-page_num = 1
+page_num = 30
+connections_count=3
 
-while new_entries_count < 3:
+print(f"searching for new connections...")
+
+while new_entries_count < connections_count:
     search_url = base_search_url.format(page_num=page_num)
     
     # Open the LinkedIn search URL
@@ -98,17 +96,22 @@ while new_entries_count < 3:
                 primary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__primary-subtitle"]')
                 secondary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__secondary-subtitle"]')
 
-                # Append the extracted data to the list
-                data.append({
+                # Create an entry dictionary
+                entry = {
                     'Name': name,
                     'URL': url,
                     'Primary Subtitle': primary_subtitle.text.strip(),
                     'Secondary Subtitle': secondary_subtitle.text.strip(),
                     'Timestamp': datetime.now().strftime('%d/%m/%Y %I:%M %p')
-                })
-
+                }
+                
+                # Append the extracted data to the list
+                data.append(entry)
                 new_entries_count += 1
 
+                # Print the new entry and ensure any leftover text from the previous print is cleared
+                print(f"New entry {new_entries_count}/{connections_count} added: {name}, {primary_subtitle.text.strip()}, {secondary_subtitle.text.strip()}", end='\r', flush=True)     
+                
                 # Click the connect button
                 time.sleep(5)  # Pause between requests to avoid detection
                 connect_button.click()
@@ -117,20 +120,27 @@ while new_entries_count < 3:
                 # Handle the connection request dialog
                 send_button = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Send without a note']")))
                 send_button.click()
-                WebDriverWait(driver, 10).until(EC.invisibility_of_element((By.XPATH, "//button[@aria-label='Send without a note']")))
+
+                # Handle the "Got it" button if it appears
+                try:
+                    got_it_button = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Got it']"))
+                    )
+                    got_it_button.click()
+                except Exception as e:
+                    print("")
 
                 # Wait for the "Connect" button to reappear (in case you're iterating for the next connection)
                 WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button//span[text()='Connect']")))
 
-                if new_entries_count >= 20:
+                if new_entries_count >= connections_count:
                     break
 
         except Exception as e:
-            print(f"Error processing element: {e}")
             continue
 
     # Pause before moving to the next page
-    if new_entries_count < 20:
+    if new_entries_count < connections_count:
         page_num += 1
         time.sleep(5)
 
@@ -149,5 +159,6 @@ else:
 # Write the combined data to the Excel file with 'replace' if the sheet already exists
 with pd.ExcelWriter(file_name, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
     df_combined.to_excel(writer, sheet_name='Connections', index=False)
+relative_path = os.path.join(".", file_name)
 
-print(f"{new_entries_count} new entries saved to linkedin_connections.xlsx")
+print(f"{new_entries_count} new entries saved to {relative_path}")
