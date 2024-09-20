@@ -40,7 +40,7 @@ driver.find_element(By.ID, "password").send_keys(password)
 driver.find_element(By.XPATH, "//button[@type='submit']").click()
 
 # Wait for login to complete
-time.sleep(5)
+time.sleep(10)
 
 # Define the base search URL with pagination
 base_search_url = "https://www.linkedin.com/search/results/people/?geoUrn=%5B%22100517351%22%2C%22102748797%22%2C%22102095887%22%2C%22103644278%22%5D&industry=%5B%22104%22%5D&keywords=recruiter&network=%5B%22S%22%2C%22O%22%5D&origin=FACETED_SEARCH&page={page_num}&sid=V2L"
@@ -50,9 +50,9 @@ file_name = 'linkedin_connections.xlsx'
 try:
     # Try to load the existing workbook
     book = load_workbook(file_name)
-    writer = pd.ExcelWriter(file_name, engine='openpyxl')
-    writer.book = book
-    writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
+    writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')  # Open the file in append mode
+    # writer.book = book  # No need to set this if you're already in append mode, but we'll keep it
+    
     # Load existing data
     df_existing = pd.read_excel(file_name, sheet_name='Connections')
     existing_count = len(df_existing)
@@ -68,7 +68,7 @@ data = []
 new_entries_count = 0
 page_num = 1
 
-while new_entries_count < 20:
+while new_entries_count < 3:
     search_url = base_search_url.format(page_num=page_num)
     
     # Open the LinkedIn search URL
@@ -146,9 +146,8 @@ if existing_count > 0:
 else:
     df_combined = df_new
 
-df_combined.to_excel(writer, sheet_name='Connections', index=False)
-
-# Save the workbook
-writer._save()  # Use _save() instead of save()
+# Write the combined data to the Excel file with 'replace' if the sheet already exists
+with pd.ExcelWriter(file_name, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+    df_combined.to_excel(writer, sheet_name='Connections', index=False)
 
 print(f"{new_entries_count} new entries saved to linkedin_connections.xlsx")
