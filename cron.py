@@ -61,10 +61,10 @@ data = []
 
 # Counter for new entries
 new_entries_count = 0
-page_num = 30
+page_num = 40
 connections_count=3
 
-print(f"searching for new connections...")
+print("searching for new connections...")
 
 while new_entries_count < connections_count:
     search_url = base_search_url.format(page_num=page_num)
@@ -95,13 +95,17 @@ while new_entries_count < connections_count:
                 # Extract primary and secondary subtitles
                 primary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__primary-subtitle"]')
                 secondary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__secondary-subtitle"]')
+   
+                # Handle the connection request dialog
+                send_button = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Send without a note']")))
+                send_button.click()
 
-                # Create an entry dictionary
+                 # Create an entry dictionary
                 entry = {
                     'Name': name,
                     'URL': url,
-                    'Primary Subtitle': primary_subtitle.text.strip(),
-                    'Secondary Subtitle': secondary_subtitle.text.strip(),
+                    'Title': primary_subtitle.text.strip(),
+                    'Location': secondary_subtitle.text.strip(),
                     'Timestamp': datetime.now().strftime('%d/%m/%Y %I:%M %p')
                 }
                 
@@ -109,17 +113,9 @@ while new_entries_count < connections_count:
                 data.append(entry)
                 new_entries_count += 1
 
-                # Print the new entry and ensure any leftover text from the previous print is cleared
-                print(f"New entry {new_entries_count}/{connections_count} added: {name}, {primary_subtitle.text.strip()}, {secondary_subtitle.text.strip()}", end='\r', flush=True)     
-                
-                # Click the connect button
-                time.sleep(5)  # Pause between requests to avoid detection
-                connect_button.click()
-                time.sleep(2)
-                
-                # Handle the connection request dialog
-                send_button = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Send without a note']")))
-                send_button.click()
+                # Print the new entry 
+                print(f"New entry {new_entries_count}/{connections_count} added: {name}, {primary_subtitle.text.strip()}, {secondary_subtitle.text.strip()}")     
+             
 
                 # Handle the "Got it" button if it appears
                 try:
