@@ -19,8 +19,8 @@ password = os.getenv('PASSWORD')
 
 # Set up Chrome options to run headless (without opening a browser window)
 chrome_options = Options()
-chrome_options.add_argument("--headless=new")
-chrome_options.add_argument("--disable-gpu")
+# chrome_options.add_argument("--headless=new")
+# chrome_options.add_argument("--disable-gpu")
 
 # Set up the WebDriver with headless Chrome
 driver = webdriver.Chrome(options=chrome_options)
@@ -95,7 +95,10 @@ while new_entries_count < connections_count:
                 # Extract primary and secondary subtitles
                 primary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__primary-subtitle"]')
                 secondary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__secondary-subtitle"]')
-   
+                # Click the connect button
+                time.sleep(5)  # Pause between requests to avoid detection
+                connect_button.click()
+                time.sleep(2)
                 # Handle the connection request dialog
                 send_button = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Send without a note']")))
                 send_button.click()
