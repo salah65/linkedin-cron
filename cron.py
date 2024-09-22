@@ -54,6 +54,8 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
     data = []
     new_entries_count = 0
     page_num = 1
+    got_it_click_count = 0  # Counter for "Got it" button clicks
+
 
     print("Searching for new connections...")
     
@@ -85,18 +87,6 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
                         EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Send without a note']"))
                     )
                     send_button.click()
-
-                    # Create and append the entry
-                    entry = {
-                        'Name': name,
-                        'URL': url,
-                        'Title': primary_subtitle.text.strip(),
-                        'Location': secondary_subtitle.text.strip(),
-                        'Timestamp': datetime.now().strftime('%d/%m/%Y %I:%M %p')
-                    }
-                    data.append(entry)
-                    new_entries_count += 1
-                    print(f"New entry {new_entries_count}/{connections_count} added: {name}")
                     
                     # Handle the "Got it" button if it appears
                     try:
@@ -104,8 +94,23 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
                             EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Got it']"))
                         )
                         got_it_button.click()
+                        got_it_click_count += 1  # Increment the counter for "Got it" clicks
+                        if got_it_click_count >= 2:
+                            print("You have reached the connection limits. Exiting the script.")
+                            return data  # Exit the function
                     except Exception:
-                        pass
+                        got_it_click_count = 0  # Reset the counter if the button doesn't appear
+                         # Create and append the entry
+                        entry = {
+                        'Name': name,
+                        'URL': url,
+                        'Title': primary_subtitle.text.strip(),
+                        'Location': secondary_subtitle.text.strip(),
+                        'Timestamp': datetime.now().strftime('%d/%m/%Y %I:%M %p')
+                        }
+                        data.append(entry)
+                        new_entries_count += 1
+                        print(f"New entry {new_entries_count}/{connections_count} added: {name}")
 
                     if new_entries_count >= connections_count:
                         break
@@ -120,11 +125,14 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
     return data
 
 def save_to_csv(file_name, df_existing, data):
+    if not data:
+        print(f"No new data to save in ./{file_name}")
+        return
     """Append new connection data to the existing CSV file."""
     df_new = pd.DataFrame(data)
     df_combined = pd.concat([df_existing, df_new], ignore_index=True)
     df_combined.to_csv(file_name, index=False)
-    print(f"Data saved to {file_name}")
+    print(f"Data saved to ./{file_name}")
 
 def main():
     # File name for the CSV
