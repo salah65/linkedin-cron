@@ -7,7 +7,7 @@ import time
 from dotenv import load_dotenv
 import os
 import pandas as pd
-from openpyxl import load_workbook
+from pandas.errors import EmptyDataError, ParserError
 from datetime import datetime
 
 # Load environment variables from .env file
@@ -17,147 +17,141 @@ load_dotenv()
 username = os.getenv('EMAIL')
 password = os.getenv('PASSWORD')
 
-# Set up Chrome options to run headless (without opening a browser window)
-chrome_options = Options()
-# chrome_options.add_argument("--headless=new")
-# chrome_options.add_argument("--disable-gpu")
+def initialize_webdriver():
+    """Initialize the Selenium WebDriver."""
+    chrome_options = Options()
+    # Uncomment to run headless
+    # chrome_options.add_argument("--headless=new")
+    # chrome_options.add_argument("--disable-gpu")
+    driver = webdriver.Chrome(options=chrome_options)
+    return driver
 
-# Set up the WebDriver with headless Chrome
-driver = webdriver.Chrome(options=chrome_options)
-print("script is Running....")
-# Open LinkedIn login page
-driver.get("https://www.linkedin.com/login")
-
-# Wait for the page to load and enter credentials
-wait = WebDriverWait(driver, 10)
-wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(username)
-driver.find_element(By.ID, "password").send_keys(password)
-
-# Click login
-driver.find_element(By.XPATH, "//button[@type='submit']").click()
-
-# Wait for login to complete
-time.sleep(10)
-
-# Define the base search URL with pagination
-base_search_url = "https://www.linkedin.com/search/results/people/?geoUrn=%5B%22100517351%22%2C%22102748797%22%2C%22102095887%22%2C%22103644278%22%5D&industry=%5B%22104%22%5D&keywords=recruiter&network=%5B%22S%22%2C%22O%22%5D&origin=FACETED_SEARCH&page={page_num}&sid=V2L"
-
-# Load or create Excel file
-file_name = 'linkedin_connections.xlsx'
-try:
-    # Try to load the existing workbook
-    book = load_workbook(file_name)
-    writer = pd.ExcelWriter(file_name, engine='openpyxl', mode='a')  # Open the file in append mode
-    # Load existing data
-    df_existing = pd.read_excel(file_name, sheet_name='Connections')
-    existing_count = len(df_existing)
-except FileNotFoundError:
-    # If file does not exist, create a new workbook
-    writer = pd.ExcelWriter(file_name, engine='openpyxl')
-    existing_count = 0
-
-# List to store new data
-data = []
-
-# Counter for new entries
-new_entries_count = 0
-page_num = 40
-connections_count=3
-
-print("searching for new connections...")
-
-while new_entries_count < connections_count:
-    search_url = base_search_url.format(page_num=page_num)
+def login_to_linkedin(driver):
+    """Login to LinkedIn using the provided credentials."""
+    print("Logging into LinkedIn...")
+    driver.get("https://www.linkedin.com/login")
     
-    # Open the LinkedIn search URL
-    driver.get(search_url)
+    wait = WebDriverWait(driver, 10)
+    wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(username)
+    driver.find_element(By.ID, "password").send_keys(password)
+    driver.find_element(By.XPATH, "//button[@type='submit']").click()
     
-    # Wait for the search results to load
-    time.sleep(5)
+    # Wait for login to complete
+    time.sleep(10)
 
-    # Find all the "li" elements containing the search results
-    li_elements = driver.find_elements(By.CSS_SELECTOR, 'ul[class^="reusable-search__entity-result-list"] li')
+def load_or_create_csv(file_name):
+    """Load an existing CSV file or create a new one if not found or corrupted."""
+    try:
+        df_existing = pd.read_csv(file_name)
+        print(f"Loaded existing data from {file_name}.")
+        return df_existing
+    except (FileNotFoundError, EmptyDataError, ParserError) as e:
+        print(f"Error reading {file_name} ({e}). Creating a new CSV file.")
+        return pd.DataFrame(columns=['Name', 'URL', 'Title', 'Location', 'Timestamp'])
 
-    for li in li_elements:
-        try:
-            # Check if the li contains the specific button
-            connect_button = li.find_element(By.CSS_SELECTOR, 'button[aria-label^="Invite"]')
-            if connect_button:
-                # Extract the name and URL from the a tag within the correct span
-                name_link = li.find_element(By.CSS_SELECTOR, 'span.entity-result__title-text a')
-                name = name_link.text.strip()
-                url = name_link.get_attribute('href').strip()
+def search_linkedin_connections(driver, base_search_url, connections_count=3):
+    """Search for LinkedIn connections based on search URL and extract connection details."""
+    data = []
+    new_entries_count = 0
+    page_num = 1
 
-                # Split the name before the "View" text if needed
-                split_index = name.find('View')
-                name = name[:split_index].strip() if split_index != -1 else name
+    print("Searching for new connections...")
+    
+    while new_entries_count < connections_count:
+        search_url = base_search_url.format(page_num=page_num)
+        driver.get(search_url)
+        time.sleep(5)  # Wait for the page to load
+        
+        li_elements = driver.find_elements(By.CSS_SELECTOR, 'ul[class^="reusable-search__entity-result-list"] li')
+        for li in li_elements:
+            try:
+                connect_button = li.find_element(By.CSS_SELECTOR, 'button[aria-label^="Invite"]')
+                if connect_button:
+                    name_link = li.find_element(By.CSS_SELECTOR, 'span.entity-result__title-text a')
+                    name = name_link.text.strip()
+                    url = name_link.get_attribute('href').strip()
 
-                # Extract primary and secondary subtitles
-                primary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__primary-subtitle"]')
-                secondary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__secondary-subtitle"]')
-                # Click the connect button
-                time.sleep(5)  # Pause between requests to avoid detection
-                connect_button.click()
-                time.sleep(2)
-                # Handle the connection request dialog
-                send_button = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Send without a note']")))
-                send_button.click()
+                    # Split the name before the "View" text if needed
+                    split_index = name.find('View')
+                    name = name[:split_index].strip() if split_index != -1 else name
 
-                 # Create an entry dictionary
-                entry = {
-                    'Name': name,
-                    'URL': url,
-                    'Title': primary_subtitle.text.strip(),
-                    'Location': secondary_subtitle.text.strip(),
-                    'Timestamp': datetime.now().strftime('%d/%m/%Y %I:%M %p')
-                }
-                
-                # Append the extracted data to the list
-                data.append(entry)
-                new_entries_count += 1
+                    primary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__primary-subtitle"]')
+                    secondary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__secondary-subtitle"]')
 
-                # Print the new entry 
-                print(f"New entry {new_entries_count}/{connections_count} added: {name}, {primary_subtitle.text.strip()}, {secondary_subtitle.text.strip()}")     
-             
-
-                # Handle the "Got it" button if it appears
-                try:
-                    got_it_button = WebDriverWait(driver, 5).until(
-                        EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Got it']"))
+                    time.sleep(5)  # Pause between requests to avoid detection
+                    connect_button.click()
+                    time.sleep(2)
+                    send_button = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Send without a note']"))
                     )
-                    got_it_button.click()
-                except Exception as e:
-                    print("")
+                    send_button.click()
 
-                # Wait for the "Connect" button to reappear (in case you're iterating for the next connection)
-                WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button//span[text()='Connect']")))
+                    # Create and append the entry
+                    entry = {
+                        'Name': name,
+                        'URL': url,
+                        'Title': primary_subtitle.text.strip(),
+                        'Location': secondary_subtitle.text.strip(),
+                        'Timestamp': datetime.now().strftime('%d/%m/%Y %I:%M %p')
+                    }
+                    data.append(entry)
+                    new_entries_count += 1
+                    print(f"New entry {new_entries_count}/{connections_count} added: {name}")
+                    
+                    # Handle the "Got it" button if it appears
+                    try:
+                        got_it_button = WebDriverWait(driver, 5).until(
+                            EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Got it']"))
+                        )
+                        got_it_button.click()
+                    except Exception:
+                        pass
 
-                if new_entries_count >= connections_count:
-                    break
+                    if new_entries_count >= connections_count:
+                        break
+            except Exception:
+                continue
 
-        except Exception as e:
-            continue
+        # Move to the next page if needed
+        if new_entries_count < connections_count:
+            page_num += 1
+            time.sleep(5)
 
-    # Pause before moving to the next page
-    if new_entries_count < connections_count:
-        page_num += 1
-        time.sleep(5)
+    return data
 
-# Close the browser after task completion
-driver.quit()
-
-# Convert the data to a DataFrame and append it to the Excel file
-df_new = pd.DataFrame(data)
-
-if existing_count > 0:
-    df_existing = pd.read_excel(file_name, sheet_name='Connections')
+def save_to_csv(file_name, df_existing, data):
+    """Append new connection data to the existing CSV file."""
+    df_new = pd.DataFrame(data)
     df_combined = pd.concat([df_existing, df_new], ignore_index=True)
-else:
-    df_combined = df_new
+    df_combined.to_csv(file_name, index=False)
+    print(f"Data saved to {file_name}")
 
-# Write the combined data to the Excel file with 'replace' if the sheet already exists
-with pd.ExcelWriter(file_name, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-    df_combined.to_excel(writer, sheet_name='Connections', index=False)
-relative_path = os.path.join(".", file_name)
+def main():
+    # File name for the CSV
+    file_name = 'linkedin_connections.csv'
+    
+    # Initialize WebDriver
+    driver = initialize_webdriver()
+    
+    try:
+        # Login to LinkedIn
+        login_to_linkedin(driver)
+        
+        # Load or create the CSV file
+        df_existing = load_or_create_csv(file_name)
+        
+        # Define the search URL
+        base_search_url = "https://www.linkedin.com/search/results/people/?geoUrn=%5B%22100517351%22%2C%22102748797%22%2C%22102095887%22%2C%22103644278%22%5D&industry=%5B%22104%22%5D&keywords=recruiter&network=%5B%22S%22%2C%22O%22%5D&origin=FACETED_SEARCH&page={page_num}&sid=V2L"
 
-print(f"{new_entries_count} new entries saved to {relative_path}")
+        # Search for LinkedIn connections
+        data = search_linkedin_connections(driver, base_search_url, connections_count=3)
+        
+        # Save the extracted data to the CSV
+        save_to_csv(file_name, df_existing, data)
+        
+    finally:
+        # Close the WebDriver
+        driver.quit()
+
+if __name__ == "__main__":
+    main()
