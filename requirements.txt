@@ -1,4 +1,0 @@
-selenium
-python-dotenv
-pandas
-openpyxl

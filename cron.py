@@ -9,6 +9,8 @@ import os
 import pandas as pd
 from pandas.errors import EmptyDataError, ParserError
 from datetime import datetime
+from colorist import *
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -28,7 +30,7 @@ def initialize_webdriver():
 
 def login_to_linkedin(driver):
     """Login to LinkedIn using the provided credentials."""
-    print("Logging into LinkedIn...")
+    effect_blink("Logging into LinkedIn...",BgColor.GREEN)
     driver.get("https://www.linkedin.com/login")
     
     wait = WebDriverWait(driver, 10)
@@ -43,10 +45,9 @@ def load_or_create_csv(file_name):
     """Load an existing CSV file or create a new one if not found or corrupted."""
     try:
         df_existing = pd.read_csv(file_name)
-        print(f"Loaded existing data from {file_name}.")
         return df_existing
     except (FileNotFoundError, EmptyDataError, ParserError) as e:
-        print(f"Error reading {file_name} ({e}). Creating a new CSV file.")
+        effect_blink("Creating a new CSV file...",BgColor.GREEN)
         return pd.DataFrame(columns=['Name', 'URL', 'Title', 'Location', 'Timestamp'])
 
 def search_linkedin_connections(driver, base_search_url, connections_count=3):
@@ -57,7 +58,7 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
     got_it_click_count = 0  # Counter for "Got it" button clicks
 
 
-    print("Searching for new connections...")
+    effect_blink("Searching for new connections...",BgColor.GREEN)
     
     while new_entries_count < connections_count:
         search_url = base_search_url.format(page_num=page_num)
@@ -96,7 +97,7 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
                         got_it_button.click()
                         got_it_click_count += 1  # Increment the counter for "Got it" clicks
                         if got_it_click_count >= 2:
-                            print("You have reached the connection limits. Exiting the script.")
+                            yellow("You have reached the connection limits. Exiting the script.")
                             return data  # Exit the function
                     except Exception:
                         got_it_click_count = 0  # Reset the counter if the button doesn't appear
@@ -110,7 +111,7 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
                         }
                         data.append(entry)
                         new_entries_count += 1
-                        print(f"New entry {new_entries_count}/{connections_count} added: {name}")
+                        green(f"New entry {new_entries_count}/{connections_count} added: {name}")
 
                     if new_entries_count >= connections_count:
                         break
@@ -126,13 +127,13 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
 
 def save_to_csv(file_name, df_existing, data):
     if not data:
-        print(f"No new data to save in ./{file_name}")
+        yellow(f"No new data to save in ./{file_name}")
         return
     """Append new connection data to the existing CSV file."""
     df_new = pd.DataFrame(data)
     df_combined = pd.concat([df_existing, df_new], ignore_index=True)
     df_combined.to_csv(file_name, index=False)
-    print(f"Data saved to ./{file_name}")
+    green(f"Data saved to ./{file_name}")
 
 def main():
     # File name for the CSV
@@ -151,8 +152,18 @@ def main():
         # Define the search URL
         base_search_url = "https://www.linkedin.com/search/results/people/?geoUrn=%5B%22100517351%22%2C%22102748797%22%2C%22102095887%22%2C%22103644278%22%5D&industry=%5B%22104%22%5D&keywords=recruiter&network=%5B%22S%22%2C%22O%22%5D&origin=FACETED_SEARCH&page={page_num}&sid=V2L"
 
+        # Ask for Desired new connection number
+        while True:
+            try:
+                green("How many connections do you want to send? ")
+                send_count = int(input().strip())
+                break  # If input is valid, exit the loop
+            except ValueError:
+                red("Invalid input. Please enter a valid integer.")  # Ask again if input is not an integer
+
+       
         # Search for LinkedIn connections
-        data = search_linkedin_connections(driver, base_search_url, connections_count=3)
+        data = search_linkedin_connections(driver, base_search_url, connections_count=send_count)
         
         # Save the extracted data to the CSV
         save_to_csv(file_name, df_existing, data)
@@ -161,5 +172,5 @@ def main():
         # Close the WebDriver
         driver.quit()
 
-if __name__ == "__main__":
+if __name__ == "__main__":    
     main()
