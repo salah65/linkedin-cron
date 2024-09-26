@@ -23,8 +23,8 @@ def initialize_webdriver():
     """Initialize the Selenium WebDriver."""
     chrome_options = Options()
     # Uncomment to run headless
-    # chrome_options.add_argument("--headless=new")
-    # chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--disable-gpu")
     driver = webdriver.Chrome(options=chrome_options)
     return driver
 
