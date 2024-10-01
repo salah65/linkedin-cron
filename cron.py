@@ -25,6 +25,7 @@ def initialize_webdriver():
     # Uncomment to run headless
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--mute-audio")
     driver = webdriver.Chrome(options=chrome_options)
     return driver
 
@@ -111,7 +112,7 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
                         }
                         data.append(entry)
                         new_entries_count += 1
-                        green(f"New entry {new_entries_count}/{connections_count} added: {name}")
+                        green(f"{new_entries_count}/{connections_count} added: {name}, {primary_subtitle.text.strip()}, {secondary_subtitle.text.strip()}")
 
                     if new_entries_count >= connections_count:
                         break
