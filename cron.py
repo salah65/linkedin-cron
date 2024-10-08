@@ -42,6 +42,16 @@ def login_to_linkedin(driver):
     # Wait for login to complete
     time.sleep(10)
 
+def get_profile_link(uri, label=None):
+    if label is None: 
+        label = uri
+    parameters = ''
+
+    # OSC 8 ; params ; URI ST <name> OSC 8 ;; ST 
+    escape_mask = '\033]8;{};{}\033\\{}\033]8;;\033\\'
+
+    return escape_mask.format(parameters, uri, label)
+
 def load_or_create_csv(file_name):
     """Load an existing CSV file or create a new one if not found or corrupted."""
     try:
@@ -112,7 +122,8 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
                         }
                         data.append(entry)
                         new_entries_count += 1
-                        green(f"{new_entries_count}/{connections_count} added: {name}, {primary_subtitle.text.strip()}, {secondary_subtitle.text.strip()}")
+                        entry=f"{name}, {primary_subtitle.text.strip()}, {secondary_subtitle.text.strip()}"
+                        green(f"{new_entries_count}/{connections_count} added: {get_profile_link(url,entry)} ")
 
                     if new_entries_count >= connections_count:
                         break
