@@ -22,8 +22,7 @@ password = os.getenv('PASSWORD')
 def initialize_webdriver():
     """Initialize the Selenium WebDriver."""
     chrome_options = Options()
-    # Uncomment to run headless
-    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--headless=new")  # Run headless
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--mute-audio")
     driver = webdriver.Chrome(options=chrome_options)
@@ -61,7 +60,8 @@ def load_or_create_csv(file_name):
         effect_blink("Creating a new CSV file...",BgColor.GREEN)
         return pd.DataFrame(columns=['Name', 'URL', 'Title', 'Location', 'Timestamp'])
 
-def search_linkedin_connections(driver, base_search_url, connections_count=3):
+
+def search_linkedin_connections(driver, base_search_url, connections_count=3, df_existing=None, file_name=None):
     """Search for LinkedIn connections based on search URL and extract connection details."""
     data = []
     new_entries_count = 0
@@ -70,72 +70,88 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
 
 
     effect_blink("Searching for new connections...",BgColor.GREEN)
-    
-    while new_entries_count < connections_count:
-        search_url = base_search_url.format(page_num=page_num)
-        driver.get(search_url)
-        time.sleep(5)  # Wait for the page to load
-        
-        li_elements = driver.find_elements(By.CSS_SELECTOR, 'ul[class^="reusable-search__entity-result-list"] li')
-        for li in li_elements:
-            try:
-                connect_button = li.find_element(By.CSS_SELECTOR, 'button[aria-label^="Invite"]')
-                if connect_button:
-                    name_link = li.find_element(By.CSS_SELECTOR, 'span.entity-result__title-text a')
-                    name = name_link.text.strip()
-                    url = name_link.get_attribute('href').strip()
 
-                    # Split the name before the "View" text if needed
-                    split_index = name.find('View')
-                    name = name[:split_index].strip() if split_index != -1 else name
+    try:
+        while new_entries_count < connections_count:
+            search_url = base_search_url.format(page_num=page_num)
+            driver.get(search_url)
+            time.sleep(5)  # Wait for the page to load
 
-                    primary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__primary-subtitle"]')
-                    secondary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__secondary-subtitle"]')
+            li_elements = driver.find_elements(By.CSS_SELECTOR, 'ul[class^="reusable-search__entity-result-list"] li')
+            for li in li_elements:
+                try:
+                    connect_button = li.find_element(By.CSS_SELECTOR, 'button[aria-label^="Invite"]')
+                    if connect_button:
+                        name_link = li.find_element(By.CSS_SELECTOR, 'span.entity-result__title-text a')
+                        name = name_link.text.strip()
+                        url = name_link.get_attribute('href').strip()
 
-                    time.sleep(5)  # Pause between requests to avoid detection
-                    connect_button.click()
-                    time.sleep(2)
-                    send_button = WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Send without a note']"))
-                    )
-                    send_button.click()
-                    
-                    # Handle the "Got it" button if it appears
-                    try:
-                        got_it_button = WebDriverWait(driver, 5).until(
-                            EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Got it']"))
+                        # Split the name before the "View" text if needed
+                        split_index = name.find('View')
+                        name = name[:split_index].strip() if split_index != -1 else name
+
+                        primary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__primary-subtitle"]')
+                        secondary_subtitle = li.find_element(By.CSS_SELECTOR, 'div[class^="entity-result__secondary-subtitle"]')
+
+                        time.sleep(5)  # Pause between requests to avoid detection
+                        connect_button.click()
+                        time.sleep(2)
+                        send_button = WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Send without a note']"))
                         )
-                        got_it_button.click()
-                        got_it_click_count += 1  # Increment the counter for "Got it" clicks
-                        if got_it_click_count >= 2:
-                            yellow("You have reached the connection limits. Exiting the script.")
-                            return data  # Exit the function
-                    except Exception:
-                        got_it_click_count = 0  # Reset the counter if the button doesn't appear
-                         # Create and append the entry
+                        send_button.click()
+
+                        # Handle the "Got it" button if it appears
+                        try:
+                            got_it_button = WebDriverWait(driver, 5).until(
+                                EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Got it']"))
+                            )
+                            got_it_button.click()
+                            got_it_click_count += 1  # Increment the counter for "Got it" clicks
+                            if got_it_click_count >= 2:
+                                yellow("You have reached the connection limits. Exiting the script.")
+                                return data  # Exit the function
+                        except Exception:
+                            got_it_click_count = 0  # Reset the counter if the button doesn't appear
+
+                        # Create and append the entry
                         entry = {
-                        'Name': name,
-                        'URL': url,
-                        'Title': primary_subtitle.text.strip(),
-                        'Location': secondary_subtitle.text.strip(),
-                        'Timestamp': datetime.now().strftime('%d/%m/%Y %I:%M %p')
+                            'Name': name,
+                            'URL': url,
+                            'Title': primary_subtitle.text.strip(),
+                            'Location': secondary_subtitle.text.strip(),
+                            'Timestamp': datetime.now().strftime('%d/%m/%Y %I:%M %p')
                         }
                         data.append(entry)
                         new_entries_count += 1
-                        entry=f"{name}, {primary_subtitle.text.strip()}, {secondary_subtitle.text.strip()}"
-                        green(f"{new_entries_count}/{connections_count} added: {get_profile_link(url,entry)} ")
+                        entry_display = f"{name}, {primary_subtitle.text.strip()}, {secondary_subtitle.text.strip()}"
+                        green(f"{new_entries_count}/{connections_count} added: {get_profile_link(url, entry_display)}")
 
-                    if new_entries_count >= connections_count:
-                        break
-            except Exception:
-                continue
+                        # Save periodically to minimize data loss
+                        if new_entries_count % 5 == 0 and file_name and df_existing is not None:
+                            save_to_csv(file_name, df_existing, data)
+                            data.clear()  # Clear the data buffer after saving
 
-        # Move to the next page if needed
-        if new_entries_count < connections_count:
-            page_num += 1
-            time.sleep(5)
+                        if new_entries_count >= connections_count:
+                            break
+                except Exception:
+                    continue
 
-    return data
+            # Move to the next page if needed
+            if new_entries_count < connections_count:
+                page_num += 1
+                time.sleep(5)
+
+    except KeyboardInterrupt:
+        yellow("Script interrupted by the user. Saving current progress...")
+
+    except Exception as e:
+        red(f"An error occurred: {e}. Saving current progress...")
+
+    finally:
+        if data and file_name and df_existing is not None:
+            save_to_csv(file_name, df_existing, data)
+        return data
 
 def save_to_csv(file_name, df_existing, data):
     if not data:
@@ -162,7 +178,7 @@ def main():
         df_existing = load_or_create_csv(file_name)
         
         # Define the search URL
-        base_search_url = "https://www.linkedin.com/search/results/people/?geoUrn=%5B%22100517351%22%2C%22102748797%22%2C%22102095887%22%2C%22103644278%22%5D&industry=%5B%22104%22%5D&keywords=recruiter&network=%5B%22S%22%2C%22O%22%5D&origin=FACETED_SEARCH&page={page_num}&sid=V2L"
+        base_search_url = "https://www.linkedin.com/search/results/people/?geoUrn=%5B%22103644278%22%5D&keywords=recruiter&network=%5B%22O%22%5D&origin=FACETED_SEARCH&page={page_num}&sid=-h5"
 
         # Ask for Desired new connection number
         while True:
@@ -173,16 +189,13 @@ def main():
             except ValueError:
                 red("Invalid input. Please enter a valid integer.")  # Ask again if input is not an integer
 
-       
         # Search for LinkedIn connections
-        data = search_linkedin_connections(driver, base_search_url, connections_count=send_count)
-        
-        # Save the extracted data to the CSV
-        save_to_csv(file_name, df_existing, data)
-        
+        search_linkedin_connections(driver, base_search_url, connections_count=send_count, df_existing=df_existing, file_name=file_name)
+
     finally:
         # Close the WebDriver
         driver.quit()
 
-if __name__ == "__main__":    
+
+if __name__ == "__main__":
     main()
