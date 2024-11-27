@@ -49,7 +49,7 @@ def login_to_linkedin(driver):
 def search_linkedin_connections(driver, base_search_url, connections_count=3):
     """Search for LinkedIn connections based on search URL and extract connection details."""
     new_entries_count = 0
-    page_num = 101
+    page_num = 1
     got_it_click_count = 0  # Counter for "Got it" button clicks
 
 
@@ -98,6 +98,7 @@ def search_linkedin_connections(driver, base_search_url, connections_count=3):
                         got_it_click_count = 0  # Reset the counter if the button doesn't appear
                     time.sleep(2)
                     new_entries_count+=1
+                    green(f"connection ${new_entries_count}/${connections_count} send successfuly")
                     if new_entries_count >= connections_count:
                             break
 
